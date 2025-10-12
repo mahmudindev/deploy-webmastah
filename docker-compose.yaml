@@ -1,0 +1,48 @@
+services:
+  apps:
+    build: ./docker/apps
+    healthcheck:
+      disable: true
+    volumes:
+      - apps:/var/www/apps
+      - conf:/var/www/conf
+
+  php:
+    build: ./docker/php
+    depends_on:
+      - apps
+    healthcheck:
+      disable: true
+    post_start:
+      - command: /var/www/temp/hook/docker-post-start.sh
+    restart: unless-stopped
+    volumes:
+      - sock:/var/run/sock
+      - apps:/var/www/apps
+      - conf:/var/www/conf
+
+  web:
+    build: ./docker/web
+    depends_on:
+      - php
+    healthcheck:
+      test: wget -qO- http://127.0.0.1 || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.http-0-webmastah.entryPoints=http
+      - traefik.http.routers.http-0-webmastah.rule=Host(`comicking.oreno.top`) && PathPrefix(`/`)
+      - traefik.http.routers.http-0-webmastah.service=http-0-webmastah
+      - traefik.http.services.http-0-webmastah.loadbalancer.server.port=80
+      - traefik.http.routers.https-0-webmastah.entryPoints=https
+      - traefik.http.routers.https-0-webmastah.rule=Host(`comicking.oreno.top`) && PathPrefix(`/`)
+      - traefik.http.routers.https-0-webmastah.service=https-0-webmastah
+      - traefik.http.routers.https-0-webmastah.tls=true
+      - traefik.http.routers.https-0-webmastah.tls.certresolver=letsencrypt
+      - traefik.http.services.https-0-webmastah.loadbalancer.server.port=80
+    volumes:
+      - sock:/var/run/sock
+      - apps:/var/www/apps
+      - conf:/var/www/conf
